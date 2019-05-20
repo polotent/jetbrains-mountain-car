@@ -1,79 +1,40 @@
+import itertools
 import numpy as np
 import gym
+np.random.seed(0)
+env = gym.make('MountainCar-v0')
+env.seed(0)
 
-n_states = 40
-iter_max = 3000
+class Agent:
+    def decide(self, observation):
+        position, velocity = observation
+        lb = min(-0.09 * (position + 0.25) ** 2 + 0.03, 0.3 * (position + 0.9) ** 4 - 0.008)
+        ub = -0.07 * (position + 0.38) ** 2 + 0.07
+        if lb < velocity < ub:
+            action = 2
+        else:
+            action = 0
+        return action
 
-initial_lr = 1.0
-min_lr = 0.003
-gamma = 1.0
-t_max = 200
-eps = 0.03
+agent = Agent()
 
-
-def run_episode(env, policy=None, render=False):
-    obs = env.reset()
-    total_reward = 0
-    step_idx = 0
-    for _ in range(t_max):
+def run_episode(env, agent, render=False, verbose=False):
+    observation = env.reset()
+    episode_reward = 0.
+    for step in itertools.count():
         if render:
             env.render()
-        if policy is None:
-            action = env.action_space.sample()
-        else:
-            a,b = obs_to_state(env, obs)
-            action = policy[a][b]
-        obs, reward, done, _ = env.step(action)
-        total_reward += gamma ** step_idx * reward
-        step_idx += 1
+        action = agent.decide(observation)
+        observation, reward, done, _ = env.step(action)
+        episode_reward += reward
         if done:
             break
-    return total_reward
+    if verbose:
+        print('get {} rewards in {} steps'.format(
+                episode_reward, step + 1))
+    return episode_reward
 
-
-def obs_to_state(env, obs):
-    env_low = env.observation_space.low
-    env_high = env.observation_space.high
-    env_dx = (env_high - env_low) / n_states
-    a = int((obs[0] - env_low[0])/env_dx[0])
-    b = int((obs[1] - env_low[1])/env_dx[1])
-    return a, b
-
-
-if __name__ == '__main__':
-    env_name = 'MountainCar-v0'
-    env = gym.make(env_name)
-    env.seed(0)
-    np.random.seed(0)
-    print ('Q Learning')
-    q_table = np.zeros((n_states, n_states, 3))
-    for i in range(iter_max):
-        obs = env.reset()
-        total_reward = 0
-        eta = max(min_lr, initial_lr * (0.85 ** (i//100)))
-        for j in range(t_max):
-            a, b = obs_to_state(env, obs)
-            if np.random.uniform(0, 1) < eps:
-                action = np.random.choice(3)
-            else:
-                logits = q_table[a][b]
-                logits_exp = np.exp(logits)
-                probs = logits_exp / np.sum(logits_exp)
-                action = np.random.choice(3, p=probs)
-            obs, reward, done, _ = env.step(action)
-            total_reward += reward
-
-            a_, b_ = obs_to_state(env, obs)
-            q_table[a][b][action] = q_table[a][b][action] + eta * (reward + gamma * np.max(q_table[a_][b_]) - q_table[a][b][action])
-            if done:
-                break
-        if i % 100 == 0:
-            print('Episode {}'.format(i+1))
-
-    solution_policy = np.argmax(q_table, axis=2)
-    solution_policy_scores = [run_episode(env, solution_policy, False) for _ in range(100)]
-    print("Average score of solution = ", np.mean(solution_policy_scores))
-    # Solution
-    for i in range(10):
-        run_episode(env, solution_policy, True)
-    env.close()
+episode_rewards = [run_episode(env, agent) for _ in range(100)]
+print('average episode rewards = {}'.format(np.mean(episode_rewards)))
+run_episode(env, agent, True)
+env.close()
