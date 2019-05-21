@@ -53,7 +53,7 @@ class Car:
         state = self.env.reset()
         while True:
             state = np.reshape(state, [1, self.env.observation_space.shape[0]])
-            action = self.agent.choose_action(state)
+            action = self.agent.get_action(state)
             self.env.render()
             next_state, reward, done, _ = self.env.step(action)
             state = next_state
